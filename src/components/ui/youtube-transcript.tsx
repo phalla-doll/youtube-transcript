@@ -188,7 +188,7 @@ export default function YoutubeTranscriptComponent() {
                                                 </div>
                                             )}
                                             {!isLoading && !error && !transcript && !youtubeLink && (
-                                                <p className="text-muted-foreground">Enter a YouTube link above and click "Get Transcript".</p>
+                                                <p className="text-muted-foreground">Enter a YouTube link above and click &quot;Get Transcript&quot;.</p>
                                             )}
                                             {!isLoading && !error && !transcript && youtubeLink && !error && (
                                                 <p className="text-muted-foreground">No transcript found or an issue occurred.</p>
