@@ -1,4 +1,12 @@
-import { YoutubeTranscript } from 'youtube-transcript';
+import {
+    YoutubeTranscript,
+    YoutubeTranscriptError,
+    YoutubeTranscriptTooManyRequestError,
+    YoutubeTranscriptVideoUnavailableError,
+    YoutubeTranscriptDisabledError,
+    YoutubeTranscriptNotAvailableError,
+    YoutubeTranscriptNotAvailableLanguageError
+} from 'youtube-transcript';
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
@@ -9,35 +17,60 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'YouTube link is required' }, { status: 400 });
     }
 
+    let videoTitle = "Title not found";
     try {
         // Fetch video title using oEmbed
         const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(youtubeLink)}&format=json`;
-        let videoTitle = "Title not found";
-        try {
-            const oembedResponse = await fetch(oembedUrl);
-            if (oembedResponse.ok) {
-                const oembedData = await oembedResponse.json();
-                videoTitle = oembedData.title;
-            } else {
-                console.warn("Failed to fetch video title from oEmbed API, status:", oembedResponse.status);
-            }
-        } catch (oembedError) {
-            console.warn("Error fetching video title from oEmbed API:", oembedError);
+        const oembedResponse = await fetch(oembedUrl);
+        if (oembedResponse.ok) {
+            const oembedData = await oembedResponse.json();
+            videoTitle = oembedData.title;
+        } else {
+            console.warn(`Failed to fetch video title from oEmbed API for ${youtubeLink}. Status: ${oembedResponse.status}, Body: ${await oembedResponse.text()}`);
         }
+    } catch (oembedError) {
+        console.warn(`Error fetching video title from oEmbed API for ${youtubeLink}:`, oembedError);
+    }
 
+    try {
         const transcript = await YoutubeTranscript.fetchTranscript(youtubeLink);
         return NextResponse.json({ title: videoTitle, transcript });
     } catch (err) {
-        console.error("Error fetching transcript in API route:", err);
-        let errorMessage = "Failed to fetch transcript.";
-        if (err instanceof Error) {
-            // Check for common error messages from the library if needed
-            if (err.message.includes("subtitles not found")) {
-                errorMessage = "No transcript found for this video, or transcripts are disabled.";
-            } else if (err.message.includes("Invalid video ID")) {
+        // Log the full error for server-side debugging, especially in production
+        console.error(`Error fetching transcript for YouTube link "${youtubeLink}":`, err);
+
+        let errorMessage = "Failed to fetch transcript. The server encountered an issue.";
+        let statusCode = 500;
+        let errorDetails = err instanceof Error ? err.message : "An unknown error occurred.";
+
+        if (err instanceof YoutubeTranscriptTooManyRequestError) {
+            errorMessage = "Could not process the request due to too many requests to YouTube. Please try again later.";
+            statusCode = 429; // Too Many Requests
+        } else if (err instanceof YoutubeTranscriptVideoUnavailableError) {
+            errorMessage = "The video is unavailable or does not exist.";
+            statusCode = 404; // Not Found
+        } else if (err instanceof YoutubeTranscriptDisabledError) {
+            errorMessage = "Transcripts are disabled for this video.";
+            statusCode = 400; // Bad Request (as it's a characteristic of the video)
+        } else if (err instanceof YoutubeTranscriptNotAvailableError) {
+            errorMessage = "No transcripts are available for this video.";
+            statusCode = 404; // Not Found
+        } else if (err instanceof YoutubeTranscriptNotAvailableLanguageError) {
+            // This error is for when a specific language is requested and not found.
+            // If you're not specifying a language, it might be less common.
+            errorMessage = `Transcripts are not available in the requested language. Available: ${err.message}`;
+            statusCode = 404;
+        } else if (err instanceof YoutubeTranscriptError) {
+            // Catch other specific library errors
+            errorMessage = `A problem occurred while fetching the transcript: ${errorDetails}`;
+            // statusCode remains 500 or could be 400 if it implies a bad video ID
+            if (errorDetails.includes("Impossible to retrieve Youtube video ID")) {
+                statusCode = 400; // Bad Request
                 errorMessage = "Invalid YouTube link provided.";
             }
         }
-        return NextResponse.json({ error: errorMessage, details: (err as Error).message }, { status: 500 });
+        // For any other errors, it defaults to a generic 500 error.
+
+        return NextResponse.json({ error: errorMessage, details: errorDetails }, { status: statusCode });
     }
 }
