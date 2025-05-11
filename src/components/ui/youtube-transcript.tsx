@@ -17,7 +17,7 @@ export default function YoutubeTranscript() {
     return (
         <>
             <div className="container sm:mx-auto">
-                <div className="flex flex-col items-center w-full justify-center min-h-screen py-20 px-4">
+                <div className="flex flex-col items-center w-full justify-center min-h-[90vh] py-20 px-4">
                     <div className="w-full sm:w-[650px]">
                         <h1 className="text-2xl font-light tracking-tight mb-5 text-center">Youtube Transcript</h1>
                         <div className="flex items-center gap-2">
