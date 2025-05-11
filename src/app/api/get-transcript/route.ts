@@ -41,7 +41,7 @@ export async function GET(request: Request) {
 
         let errorMessage = "Failed to fetch transcript. The server encountered an issue.";
         let statusCode = 500;
-        let errorDetails = err instanceof Error ? err.message : "An unknown error occurred.";
+        const errorDetails = err instanceof Error ? err.message : "An unknown error occurred.";
 
         if (err instanceof YoutubeTranscriptTooManyRequestError) {
             errorMessage = "Could not process the request due to too many requests to YouTube. Please try again later.";
