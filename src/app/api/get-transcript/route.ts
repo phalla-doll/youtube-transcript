@@ -55,7 +55,12 @@ export async function GET(request: Request) {
     try {
         // Fetch video title using oEmbed
         const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(youtubeLink)}&format=json`;
-        const fetchOptions: RequestInit = {};
+        const fetchOptions: RequestInit = {
+            headers: { // Add common browser headers
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9',
+            }
+        };
         if (agent) {
             // @ts-expect-error // HttpsProxyAgent is compatible with fetch's agent option
             fetchOptions.agent = agent;
@@ -77,10 +82,18 @@ export async function GET(request: Request) {
         if (agent) {
             transcriptConfig.axiosRequestConfig = {
                 httpsAgent: agent,
-                // If your proxy is an HTTP proxy but you're accessing an HTTPS URL (like YouTube),
-                // HttpsProxyAgent handles the CONNECT tunnel.
-                // If axios needs explicit proxy object:
-                // proxy: false, // Important to disable axios's default proxy handling if using agent
+                // proxy: false, // Already commented, good.
+                headers: { // Add common browser headers
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                }
+            };
+        } else {
+            transcriptConfig.axiosRequestConfig = {
+                headers: { // Add common browser headers even if not using proxy
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                }
             };
         }
         const transcript = await YoutubeTranscript.fetchTranscript(youtubeLink, transcriptConfig);
