@@ -5,51 +5,127 @@ import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import { Loader2 } from "lucide-react";
 
 export default function YoutubeTranscriptComponent() {
     const [showCard, setShowCard] = useState(false);
     const [youtubeLink, setYoutubeLink] = useState("");
-    const [transcript, setTranscript] = useState<[{ text: string, duration: number, offset: number }] | []>([]);
+    // Update transcript state to match the youtube-caption-extractor output structure more closely
+    // or adapt the fetched data. For now, let's adapt the fetched data.
+    // The API returns: { text: string, start: string, dur: string }
+    // We need: { text: string, duration: number, offset: number }
+    const [transcript, setTranscript] = useState<Array<{ text: string; duration: number; offset: number }>>([]);
     const [videoTitle, setVideoTitle] = useState<string>(""); // Add state for video title
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
 
-    const handleGetTranscript = async () => {
+    // const handleGetTranscript = async () => {
+    //     if (!youtubeLink) {
+    //         setError("Please paste a YouTube link.");
+    //         setShowCard(true);
+    //         setTranscript([]);
+    //         setVideoTitle(""); // Reset video title
+    //         return;
+    //     }
+    //     setIsLoading(true);
+    //     setError(null);
+    //     setTranscript([]);
+    //     setVideoTitle(""); // Reset video title on new fetch
+    //     setShowCard(true);
+
+    //     try {
+    //         // Make a request to your new API route
+    //         const response = await fetch(`/api/get-transcript?url=${encodeURIComponent(youtubeLink)}`);
+    //         const data = await response.json();
+
+    //         if (!response.ok) {
+    //             throw new Error(data.error || `HTTP error! status: ${response.status}`);
+    //         }
+    //         console.log("Transcript data:", data);
+    //         setTranscript(data.transcript);
+    //         // Assuming your API response includes videoTitle, e.g., data.videoTitle
+    //         if (data.title && typeof data.title === 'string') {
+    //             setVideoTitle(data.title);
+    //         } else {
+    //             setVideoTitle(""); // Set to empty if not available or not a string
+    //         }
+    //     } catch (err) {
+    //         console.error("Error fetching transcript from API:", err);
+    //         setError((err as Error).message || "Failed to fetch transcript. Please check the link or try again.");
+    //         setTranscript([]);
+    //         setVideoTitle(""); // Reset video title on error
+    //     } finally {
+    //         setIsLoading(false);
+    //     }
+    // };
+
+    // Helper function to extract video ID from YouTube URL
+    const extractVideoID = (url: string): string | null => {
+        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+        const match = url.match(regExp);
+        return (match && match[2].length === 11) ? match[2] : null;
+    };
+
+    const handleGetManualTranscript = async () => {
         if (!youtubeLink) {
             setError("Please paste a YouTube link.");
             setShowCard(true);
             setTranscript([]);
-            setVideoTitle(""); // Reset video title
+            setVideoTitle("");
             return;
         }
+
+        const videoID = extractVideoID(youtubeLink);
+        if (!videoID) {
+            setError("Invalid YouTube link. Could not extract video ID.");
+            setShowCard(true);
+            setTranscript([]);
+            setVideoTitle("");
+            return;
+        }
+
         setIsLoading(true);
         setError(null);
         setTranscript([]);
-        setVideoTitle(""); // Reset video title on new fetch
+        // Video title is not fetched by getSubtitles, so we might need another way or remove it for this function
+        setVideoTitle(""); 
         setShowCard(true);
 
         try {
-            // Make a request to your new API route
-            const response = await fetch(`/api/get-transcript?url=${encodeURIComponent(youtubeLink)}`);
+            // Using videoID for the API call
+            const response = await fetch(`/api/get-manual-transcript?videoID=${videoID}`); // lang can be added if needed
             const data = await response.json();
 
             if (!response.ok) {
                 throw new Error(data.error || `HTTP error! status: ${response.status}`);
             }
-            console.log("Transcript data:", data);
-            setTranscript(data.transcript);
-            // Assuming your API response includes videoTitle, e.g., data.videoTitle
-            if (data.title && typeof data.title === 'string') {
-                setVideoTitle(data.title);
+
+            console.log("Manual Transcript API Response (youtube-caption-extractor):", data);
+
+            // The data is expected to be an array of { text: string, start: string, dur: string }
+            if (Array.isArray(data)) {
+                const formattedTranscript = data.map(item => ({
+                    text: item.text,
+                    offset: parseFloat(item.start), // 'start' is string in seconds
+                    duration: parseFloat(item.dur)  // 'dur' is string in seconds
+                }));
+                setTranscript(formattedTranscript);
             } else {
-                setVideoTitle(""); // Set to empty if not available or not a string
+                // Handle cases where data might not be an array (e.g., an error object not caught by !response.ok)
+                console.error("Received non-array data from manual transcript API:", data);
+                setError("Received unexpected data format for transcript.");
+                setTranscript([]);
             }
+            // Note: getSubtitles does not return video title. 
+            // If title is needed, consider using getVideoDetails from youtube-caption-extractor
+            // or fetching it separately. For now, title remains empty or could be derived from user input if needed.
+
         } catch (err) {
-            console.error("Error fetching transcript from API:", err);
-            setError((err as Error).message || "Failed to fetch transcript. Please check the link or try again.");
+            console.error("Error fetching manual transcript from API:", err);
+            setError((err as Error).message || "Failed to fetch manual transcript. Please check the link or try again.");
             setTranscript([]);
-            setVideoTitle(""); // Reset video title on error
+            setVideoTitle("");
         } finally {
             setIsLoading(false);
         }
@@ -126,9 +202,13 @@ export default function YoutubeTranscriptComponent() {
                                 value={youtubeLink}
                                 onChange={(e) => setYoutubeLink(e.target.value)}
                             />
-                            <Button variant="default" onClick={handleGetTranscript} disabled={isLoading}>
+                            <Button variant="default" onClick={() => { handleGetManualTranscript(); }} disabled={isLoading}>
                                 {isLoading ? "Fetching..." : "Get Transcript"}
                             </Button>
+                            {/* Example button to trigger the new function, you can integrate it as needed */}
+                            {/* <Button variant="secondary" onClick={handleGetManualTranscript} disabled={isLoading} className="ml-2">
+                                {isLoading ? "Fetching Manually..." : "Get Manual Transcript"}
+                            </Button> */}
                         </div>
                         <AnimatePresence>
                             {showCard && (
@@ -168,7 +248,7 @@ export default function YoutubeTranscriptComponent() {
                                             )}
                                         </CardHeader>
                                         <CardContent>
-                                            {isLoading && <p>Loading...</p>}
+                                            {isLoading && <p className="flex items-center gap-x-1"><Loader2 className="animate-spin" />Loading...</p>}
                                             {!isLoading && error && <p className="text-red-500">{error}</p>}
                                             {!isLoading && !error && transcript && (
                                                 <div className="max-h-96 overflow-y-auto">
